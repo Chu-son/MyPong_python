@@ -56,7 +56,7 @@ def pong_start():
 #       field = np.zeros((rows, cols, 3), np.uint8)
 
         ball_pos += d_mv
-        print(ball_pos)
+#       print(ball_pos)
 
         if not 0 <= ball_pos[0] < x:
             d_mv[0] *= -1
