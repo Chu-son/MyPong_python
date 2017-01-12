@@ -8,8 +8,18 @@ import random
 import time
 import math
 
+import pong_agents as agents
 
-class Ball():
+
+class PongObjectInterface():
+    def __init__(self):
+        self.move()
+    def move(self):
+        raise NotImplementedError()
+    def draw(self):
+        raise NotImplementedError()
+
+class Ball(PongObjectInterface):
     BALL_DIRECTION_LEFT = 1
     BALL_DIRECTION_RIGHT = 2
     BALL_DIRECTION_TOP = 4
@@ -38,7 +48,17 @@ class Ball():
 
         self.d_mv = np.array([int(d_x), int(d_y)])
 
-    def draw_ball(self, field):
+    def _reflected(self):
+        if not self._field.is_hit_vertical(self.pos):
+            pass
+        elif self.pos[1] < 0:
+            self.pos[1] *= -1
+            self.pre_pos[1] *= -1
+        else:
+            self.pos[1] = 2 * self._field.size[1] - self.pos[1]
+            self.pre_pos[1] = 2 * self._field.size[1] - self.pre_pos[1]
+
+    def draw(self, field):
         cv2.circle(field, tuple(self.pos.tolist()), 10, (0,0,255), -1)
 
     def move(self):
@@ -49,9 +69,10 @@ class Ball():
         self.pos += self.d_mv
 
         if self._field.is_hit_horizontal(self.pos):
-            #self.flip(Pong.PONG_HORIZONTAL)
             return self._field.hit_side(self.pos)
         if self._field.is_hit_vertical(self.pos):
+            self._reflected()
+            #self.pre_pos = np.array(list(map(int, self._field.hit_pos(self))))
             self.flip(Pong.PONG_VERTICAL)
 
         return self._field.FIELD_NOT_HIT
@@ -75,13 +96,14 @@ class Ball():
         self.flip(Pong.PONG_HORIZONTAL)
         self.restarted = True
 
-class Bar():
+class Bar(PongObjectInterface):
     def __init__(self, pos, field):
         self.pos = pos
         self.length = 150
         self.thickness = 10
         self.color = (255, 255, 255)
 
+        self.d_mv = 0
         self._field = field
 
         self._hit = False
@@ -96,7 +118,7 @@ class Bar():
     def set_pos_bottom(self, pos):
         self.pos[1] = pos - self.length//2
 
-    def draw_bar(self, field):
+    def draw(self, field):
         cv2.line(field,
                 self.get_pos()[0],
                 self.get_pos()[1],
@@ -149,8 +171,11 @@ class Bar():
             return None
         return self._hit_pos[0]/(self.length/2), -self._hit_pos[1]/(self.length/2)
 
-    def move(self, delta):
-        self.pos[1] += delta
+    def set_d_mv(self, delta):
+        self.d_mv = delta
+
+    def move(self):
+        self.pos[1] += self.d_mv
 
         if self._field.is_hit_vertical(self.get_pos()[0]):
             self.set_pos_top(0)
@@ -197,101 +222,24 @@ class Field():
             else:
                 return Field.FIELD_HIT_RIGHT
 
-class Drawer():
-    def __init__(self, size):
-        pass
-
-class Agent():
-    AGENT_MOVE_STOP = 0
-    AGENT_MOVE_TOP = 1
-    AGENT_MOVE_BOTTOM = 2
-
-    AGENT_LEFT = 1
-    AGENT_RIGHT = 2
-
-    def __init__(self, bar):
-        self._bar = bar
-        self._d_mv = 5
-
-        self._movement = 0
-
-    def _set_move_direction(self, direction):
-        if direction == Agent.AGENT_MOVE_TOP:
-            self._movement = -self._d_mv
-        elif direction == Agent.AGENT_MOVE_BOTTOM:
-            self._movement = self._d_mv
+    def hit_pos(self, ball, direction = None):
+        if direction is not None and direction == Pong.PONG_HORIZONTAL:
+            if not self.is_hit_horizontal(pos):
+                return ball.pos
         else:
-            self._movement = 0
+            if not self.is_hit_horizontal(ball.pos):
+                return ball.pos
+            elif self.hit_side(ball.pos,Pong.PONG_VERTICAL) == Field.FIELD_HIT_TOP:
+                hit_line = [[0, 0], [Field.size[0], 0]]
+            else:
+                hit_line = [[0, Field.size[1]], [Field.size[0], Field.size[1]]]
 
-    def _move(self):
-        self._bar.move(self._movement)
-
-class RandomAgent(Agent):
-    def __init__(self, bar):
-        super().__init__(bar)
-
-    def action(self):
-        if random.random() - 0.5 < 0:
-            self._set_move_direction(Agent.AGENT_MOVE_TOP)
-        else:
-            self._set_move_direction(Agent.AGENT_MOVE_BOTTOM)
-
-        self._move()
-
-class TrackingAgent(Agent):
-    def __init__(self, bar):
-        super().__init__(bar)
-
-    def action(self, ball):
-        if ball.pos[1] - self._bar.pos[1] > 0:
-            self._set_move_direction(Agent.AGENT_MOVE_BOTTOM)
-        else :
-            self._set_move_direction(Agent.AGENT_MOVE_TOP)
-
-        self._move()
-
-class TrackingAgent2(Agent):
-    def __init__(self, bar):
-        super().__init__(bar)
-
-    def action(self, ball):
-        top = ball.pos[1] - self._bar.get_pos()[0][1] -10
-        bottom = ball.pos[1] - self._bar.get_pos()[1][1] +10
-
-        near_side = top if abs(top)<abs(bottom) else bottom
-
-        if near_side > 0:
-            self._set_move_direction(Agent.AGENT_MOVE_BOTTOM)
-        else :
-            self._set_move_direction(Agent.AGENT_MOVE_TOP)
-
-        self._move()
-
-class TrackingAgent3(Agent):
-    def __init__(self, bar):
-        super().__init__(bar)
-
-    def action(self, ball):
-        dist = ball.pos[0] - self._bar.pos[0]
-        dist_pre = ball.pre_pos[0] - self._bar.pos[0]
-
-        if abs(dist) < abs(dist_pre) :
-            target_point = self._estimate_point(ball)
-        else:
-            target_point = [self._bar._field.size[0], self._bar._field.size[1]//2]
-
-        if target_point[1] - self._bar.pos[1] > 0:
-            self._set_move_direction(Agent.AGENT_MOVE_BOTTOM)
-        else :
-            self._set_move_direction(Agent.AGENT_MOVE_TOP)
-
-        self._move()
-
-    def _calc_intersection_point(self, line1, line2):
-        a, b = line1
-        c, d = line2
+        a, b = hit_line
+        c, d = ball.pos, ball.pre_pos
 
         dev = (b[1] - a[1]) * (d[0] - c[0]) - (b[0] - a[0]) * (d[1] - c[1])
+        if dev == 0:
+            return list(map(lambda x:x/2,self._bar._field.size))
         d1 = c[1] * d[0] - c[0] * d[1]
         d2 = a[1] * b[0] - a[0] * b[1]
 
@@ -300,55 +248,9 @@ class TrackingAgent3(Agent):
 
         return [x, y]
 
-    def _estimate_point(self, ball):
-        intersection = self._calc_intersection_point([ball.pos, ball.pre_pos], self._bar.get_pos())
-        y = intersection[1] % self._bar._field.size[1]
-        count = intersection[1] // self._bar._field.size[1]
-        y = -y if count%2 != 0 else y
-        y = self._bar._field.size[1] + y if y < 0 else y
-        return [intersection[0], y]
-
-class TrackingAgent4(TrackingAgent3):
-    def __init__(self, bar):
-        super().__init__(bar)
-
-    def action(self, ball):
-        dist = ball.pos[0] - self._bar.pos[0]
-        dist_pre = ball.pre_pos[0] - self._bar.pos[0]
-
-        if abs(dist) < abs(dist_pre) :
-            target_point = self._estimate_point(ball)
-        else:
-            target_point = [self._bar._field.size[0], self._bar._field.size[1]//2]
-
-        top = target_point[1] - self._bar.get_pos()[0][1] -15
-        bottom = target_point[1] - self._bar.get_pos()[1][1] +15
-
-        near_side = top if abs(top)<abs(bottom) else bottom
-
-        if near_side > 0:
-            self._set_move_direction(Agent.AGENT_MOVE_BOTTOM)
-        else :
-            self._set_move_direction(Agent.AGENT_MOVE_TOP)
-
-
-        self._move()
-
-class Player(Agent):
-    def __init__(self, bar):
-        super().__init__(bar)
-        self.movement = 0
-
-    def action(self, key = None):
-        if key is not None:
-            if key == 2490368:
-                self._set_move_direction(Agent.AGENT_MOVE_TOP)
-            elif key == 2621440:
-                self._set_move_direction(Agent.AGENT_MOVE_BOTTOM)
-            elif key == 2555904 or key == 2424832 or key == 32:
-                self._set_move_direction(Agent.AGENT_MOVE_STOP)
-
-        self._move()
+class Drawer():
+    def __init__(self, size):
+        pass
 
 class Pong():
     PONG_HORIZONTAL = 1
@@ -382,7 +284,9 @@ class Pong():
         color = (255,255,255)
 
         ret,tsize = cv2.getTextSize(text, font, fontscale, thickness)
-        cv2.putText(field, text, (self.field_size[0]//2 - ret[0]//2, ret[1] + 20), font, fontscale, color, thickness)
+        cv2.putText(field, text, 
+                (self.field_size[0]//2 - ret[0]//2, ret[1] + 20), 
+                font, fontscale, color, thickness)
 
     def pong_start(self):
         field = Field(self.field_size)
@@ -392,10 +296,9 @@ class Pong():
         bar_left = Bar([self.bar_offset, self.field_size[1]//2], field)
         bar_right = Bar([self.field_size[0] - self.bar_offset, self.field_size[1]//2], field)
 
-        #cpu = RandomAgent(bar_left)
-        cpu = TrackingAgent3(bar_left)
-        #player = Player(bar_right)
-        player = TrackingAgent4(bar_right)
+        cpu = agents.TrackingAgent3(bar_left)
+        #player = agents.Player(bar_right)
+        player = agents.TrackingAgent4(bar_right)
 
         while True:
             key = cv2.waitKey(1)
@@ -410,26 +313,28 @@ class Pong():
                     self.point[1] += 1
 
                 ball.restart()
-                #print(self.point)
             
-            #cpu.action()
-            cpu.action(ball)
-            #player.action(key)
-            player.action(ball)
+            est_ball_left = Ball(list(map(int, cpu._get_target_point(ball))), field)
+            est_ball_right = Ball(list(map(int, player._get_target_point(ball))), field)
+            est_ball_left.draw(field.get_field())
+            est_ball_right.draw(field.get_field())
+
+            cpu.move(ball)
+            #player.move(key)
+            player.move(ball)
 
             if bar_left.is_hit(ball):
-                #ball.flip( Pong.PONG_HORIZONTAL )
                 self._set_ball_param(ball, bar_left)
             if bar_right.is_hit(ball):
                 self._set_ball_param(ball, bar_right)
 
-            bar_left.draw_bar(field.get_field())
-            bar_right.draw_bar(field.get_field()) 
-            ball.draw_ball(field.get_field())
+            bar_left.draw(field.get_field())
+            bar_right.draw(field.get_field()) 
+            ball.draw(field.get_field())
 
             self.draw_point(field.get_field())
 
-            cv2.imshow("field",field.get_field())
+            cv2.imshow("pong",field.get_field())
 
             if key == 27:
                 break
@@ -438,7 +343,8 @@ class Pong():
 
 
 if __name__ == "__main__":
-    field_size = [1000, 500]
+    #field_size = [1000, 500]
+    field_size = [1900, 1200]
     pong = Pong(field_size)
     pong.pong_start()
 
