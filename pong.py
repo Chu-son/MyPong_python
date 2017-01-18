@@ -1,4 +1,4 @@
-#! /usr/bin/env python
+! /usr/bin/env python
 # -*- coding:utf-8 -*-
 
 import cv2
@@ -48,7 +48,10 @@ class Ball(PongObjectInterface):
 
         self.d_mv = np.array([int(d_x), int(d_y)])
 
-    def _reflected(self):
+    def _bounded(self):
+        """
+        pos,pre_posを境界線(上下)対称に変換
+        """
         if not self._field.is_hit_vertical(self.pos):
             pass
         elif self.pos[1] < 0:
@@ -71,7 +74,7 @@ class Ball(PongObjectInterface):
         if self._field.is_hit_horizontal(self.pos):
             return self._field.hit_side(self.pos)
         if self._field.is_hit_vertical(self.pos):
-            self._reflected()
+            self._bounded()
             #self.pre_pos = np.array(list(map(int, self._field.hit_pos(self))))
             self.flip(Pong.PONG_VERTICAL)
 
