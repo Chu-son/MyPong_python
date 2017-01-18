@@ -301,7 +301,8 @@ class Pong():
         player = agents.TrackingAgent4(bar_right)
 
         while True:
-            key = cv2.waitKey(1)
+            #key = cv2.waitKey(1)
+            key = 0
             field.refresh()
 
             #if not ball.restarted or key >= 0:
@@ -313,6 +314,7 @@ class Pong():
                     self.point[1] += 1
 
                 ball.restart()
+                print(self.point)
             
             est_ball_left = Ball(list(map(int, cpu._get_target_point(ball))), field)
             est_ball_right = Ball(list(map(int, player._get_target_point(ball))), field)
@@ -334,7 +336,7 @@ class Pong():
 
             self.draw_point(field.get_field())
 
-            cv2.imshow("pong",field.get_field())
+            #cv2.imshow("pong",field.get_field())
 
             if key == 27:
                 break
